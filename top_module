@@ -1,0 +1,57 @@
+module topmodule(
+
+input topmodule_clk,
+input topmodule_rst,
+
+input data_in_ready,
+input data_in_control,
+input [7:0] data_in_in,
+
+output data_out_ready,
+output data_out_control,
+output [7:0] data_out_out, 
+
+output stop
+    );
+
+wire [71:0] data_pixels;
+wire data_pixels_control;
+wire axis_prog_full;
+wire [7:0] data_converted_converted;
+wire data_converted_converted_control;
+
+assign data_out_ready = !axis_prog_full;
+
+control_unit ControlUnit(
+.clk(topmodule_clk),
+.rst(!topmodule_rst),
+.pixel_data(data_in_in),
+.pixel_data_control(data_in_control),
+.pixel_data_out(data_pixels),
+.pixel_data_out_control(data_pixels_control),
+.stop_signal(stop)
+);
+
+sobel Sobel(
+.clk(topmodule_clk),
+.data_pixel(data_pixels),
+.data_pixel_control(data_pixels_control),
+.data_converted(data_converted_converted),
+.data_converted_control(data_converted_converted_control)
+);
+
+OutputBuffer Output_Buffer ( // Instantiate FIFO
+  .wr_rst_busy(),        // output wire wr_rst_busy
+  .rd_rst_busy(),
+  .s_aclk(topmodule_clk),                  
+  .s_aresetn(topmodule_rst),           
+  .s_axis_tvalid(data_converted_converted_control),   
+  .s_axis_tready(),    
+  .s_axis_tdata(data_converted_converted),      
+  .m_axis_tvalid(data_out_control),    
+  .m_axis_tready(data_in_ready),    
+  .m_axis_tdata(data_out_out),      
+  .axis_prog_full(axis_prog_full)  
+);
+
+endmodule
