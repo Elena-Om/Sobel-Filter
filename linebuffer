@@ -1,0 +1,40 @@
+`timescale 1ns / 1ps
+
+module linebuffer(
+input clk,
+input rst,
+input [7:0] data_in, //pixel(8-bit) that is read every time
+input data_control, 
+input data_read,
+output [23:0] data_out //3 pixels are given every time/cycle, verilog cannot have multidimensional characterization
+    );
+
+reg [7:0] line_buffer [63:0]; //Memory Linebuffer
+reg [5:0] write_pointer; //6 bits, 2^6 -> Shows addresses from 0 till 63 
+reg [5:0] read_pointer;
+
+always @(posedge clk)
+begin
+ if (data_control)
+ line_buffer[write_pointer] <= data_in;   
+end
+
+always @(posedge clk)
+begin
+ if (rst)
+ write_pointer <= 1'd0; //replace back to 0
+ else if (data_control)
+ write_pointer <= write_pointer + 1'd1;  //raise by 1
+end
+
+assign data_out = {line_buffer[read_pointer],line_buffer[read_pointer+1],line_buffer[read_pointer+2]};
+
+always @(posedge clk)
+begin
+ if(rst)
+ read_pointer <= 1'd0;
+ else if (data_read) 
+ read_pointer <= read_pointer + 1'd1;
+end
+    
+endmodule
