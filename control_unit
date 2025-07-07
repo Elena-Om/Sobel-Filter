@@ -1,0 +1,222 @@
+`timescale 1ns / 1ps
+
+module control_unit(
+
+input clk,
+input rst,
+input [7:0] pixel_data,
+input pixel_data_control,
+
+output reg [71:0] pixel_data_out,
+output pixel_data_out_control,
+output reg stop_signal
+    );
+    
+reg [5:0] counter_pixel; //counts pixels from 0 to 63, written in linebuffer
+reg [1:0] current_write_buffer; //which buffer we write
+reg [3:0] linebuffer_control; //valid signal for linebuffer, 4 linebuffers
+reg [3:0] data_read_control; //valid signal for read
+reg [1:0] current_read_buffer;
+reg [5:0] counter_pixels_read; //Counts pixels read from the line buffer
+
+reg [8:0] counter_total_pixels; //did a change 
+
+reg readstate; //Stores the states of the state machine 
+reg readbuffer; //Control signal for reading operations
+
+wire [23:0] line_buffer0_data;
+wire [23:0] line_buffer1_data;
+wire [23:0] line_buffer2_data;
+wire [23:0] line_buffer3_data;
+
+localparam WAIT = 1'b0,
+           READ = 1'b1;
+           
+assign pixel_data_out_control = readbuffer;
+
+always @(posedge clk) 
+begin
+ if(rst)
+ counter_total_pixels <= 0;
+ else
+ begin
+  if (pixel_data_control & !readbuffer)
+   counter_total_pixels <= counter_total_pixels + 1;
+  else if (!pixel_data_control & readbuffer)
+   counter_total_pixels <= counter_total_pixels - 1;
+ end
+end
+
+always @(posedge clk)
+begin
+ if(rst)
+ begin
+  readstate <= WAIT; //all in 1'b0
+  readbuffer <= 1'b0;
+  stop_signal <= 1'b0;
+ end
+ else
+ begin
+  case (readstate)
+   WAIT:begin
+      stop_signal <= 1'b0;
+      if (counter_total_pixels >= 192)
+      begin
+       readbuffer <= 1'b1;
+       readstate <= READ; //1'b1
+       end
+      end
+   READ:begin
+      if (counter_pixels_read ==63)
+      begin
+       readstate <= WAIT;
+       readbuffer <= 1'b0;
+       stop_signal <= 1'b1;
+       end
+      end
+     endcase
+   end
+end
+
+always @(posedge clk)
+begin
+ if (rst)
+  counter_pixel <= 0;
+ else
+ begin
+  if (pixel_data_control)
+   counter_pixel <= counter_pixel + 1;
+ end
+end
+
+always @(posedge clk)
+begin
+ if(rst)
+  current_write_buffer <= 0;
+ else
+ begin
+  if (counter_pixel == 63 & pixel_data_control)
+   current_write_buffer <= current_write_buffer + 1;
+ end
+end
+
+always @(*)
+begin
+ linebuffer_control = 4'h0;
+ linebuffer_control[current_write_buffer] = pixel_data_control;
+end
+
+always @(posedge clk)
+begin
+ if (rst)
+  counter_pixels_read <= 0;
+ else 
+ begin 
+  if (readbuffer)
+   counter_pixels_read <= counter_pixels_read + 1;
+ end
+end
+
+always @(posedge clk)
+begin
+ if (rst)
+  current_read_buffer <= 0;
+ else 
+ begin
+  if (counter_pixels_read == 63 & readbuffer)
+   current_read_buffer <= current_read_buffer + 1;
+ end
+end
+
+always @(*)
+begin
+ case (current_read_buffer)
+  0:begin
+   pixel_data_out = {line_buffer2_data, line_buffer1_data, line_buffer0_data};
+  end
+  
+  1:begin
+   pixel_data_out = {line_buffer3_data, line_buffer2_data, line_buffer1_data};
+  end
+  
+  2:begin
+   pixel_data_out = {line_buffer0_data, line_buffer3_data, line_buffer2_data};
+  end
+  
+  3:begin
+   pixel_data_out = {line_buffer1_data, line_buffer0_data, line_buffer3_data};
+  end
+ endcase
+end
+
+always @(*)
+begin
+ case (current_read_buffer)
+  0:begin
+   data_read_control[0] = readbuffer;
+   data_read_control[1] = readbuffer;
+   data_read_control[2] = readbuffer;
+   data_read_control[3] = 1'b0;
+  end
+  
+  1:begin
+   data_read_control[0] = 1'b0;
+   data_read_control[1] = readbuffer;
+   data_read_control[2] = readbuffer;
+   data_read_control[3] = readbuffer;
+  end
+  
+  2:begin
+   data_read_control[0] = readbuffer;
+   data_read_control[1] = 1'b0;
+   data_read_control[2] = readbuffer;
+   data_read_control[3] = readbuffer;
+  end
+  
+  3:begin 
+   data_read_control[0] = readbuffer;
+   data_read_control[1] = readbuffer;
+   data_read_control[2] = 1'b0;
+   data_read_control[3] = readbuffer;
+  end
+ endcase
+end
+
+linebuffer lb0 (
+.clk(clk),
+.rst(rst),
+.data_in(pixel_data),
+.data_control(linebuffer_control[0]),
+.data_read(data_read_control[0]),
+.data_out(line_buffer0_data)
+);
+
+linebuffer lb1 (
+.clk(clk),
+.rst(rst),
+.data_in(pixel_data),
+.data_control(linebuffer_control[1]),
+.data_read(data_read_control[1]),
+.data_out(line_buffer1_data)
+);
+
+
+linebuffer lb2 (
+.clk(clk),
+.rst(rst),
+.data_in(pixel_data),
+.data_control(linebuffer_control[2]),
+.data_read(data_read_control[2]),
+.data_out(line_buffer2_data)
+);
+
+linebuffer lb3 (
+.clk(clk),
+.rst(rst),
+.data_in(pixel_data),
+.data_control(linebuffer_control[3]),
+.data_read(data_read_control[3]),
+.data_out(line_buffer3_data)
+);
+
+endmodule
