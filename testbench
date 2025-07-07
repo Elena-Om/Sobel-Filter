@@ -1,0 +1,137 @@
+`timescale 1ns / 1ps
+
+`define HeaderSize 2287
+`define IMAGE 4096 //64x64
+
+module testbench_sobel(
+    );
+    
+reg tb_clk;
+reg tb_rst;
+reg [7:0] image_data;
+reg image_data_control;
+
+integer file_in;
+integer file_out;
+integer i;
+integer data_sent;
+integer data_received=0;
+
+wire intr;
+wire [7:0] data_out_out_out;
+wire data_out_out_out_control;
+
+initial
+begin
+ tb_clk = 1'b0;
+ forever
+ begin
+  #5 tb_clk = ~tb_clk;
+ end
+end
+
+initial 
+begin
+ tb_rst = 0;
+ data_sent = 0;
+ image_data_control = 0;
+ #100;
+ tb_rst = 1;
+ #100;
+ 
+ file_in = $fopen("graynew.png","rb");
+ file_out = $fopen("graynew_out.png","wb");
+ 
+ for(i=0;i<`HeaderSize;i=i+1)
+ begin
+  $fscanf(file_in,"%c",image_data);
+  $fwrite(file_out,"%c",image_data);
+ end
+ 
+ for(i=0;i<256;i=i+1) //4*64
+ begin
+  @(posedge tb_clk);
+  $fscanf(file_in,"%c",image_data);
+  image_data_control <= 1'b1;
+ end
+ 
+data_sent = 256; //4*64 
+
+@(posedge tb_clk);
+image_data_control <= 1'b0;
+while(data_sent<`IMAGE)
+begin
+
+ @(posedge intr);
+ for(i=0;i<64;i=i+1)
+ begin
+  @(posedge tb_clk);
+  $fscanf(file_in,"%c",image_data);
+  image_data_control <= 1'b1;
+ end
+ 
+ @(posedge tb_clk);
+ image_data_control <= 1'b0;
+ data_sent = data_sent+64;
+end 
+
+
+@(posedge tb_clk);
+image_data_control <= 1'b0;
+
+@(posedge intr);
+for(i=0;i<64;i=i+1)
+ begin
+  @(posedge tb_clk);
+  image_data <= 0;
+  image_data_control <= 1'b1;
+ end
+
+@(posedge tb_clk);
+image_data_control <= 1'b0;
+
+@(posedge intr);
+for(i=0;i<64;i=i+1)
+begin
+  @(posedge tb_clk);
+  image_data <= 0;
+  image_data_control <= 1'b1;
+end
+
+
+@(posedge tb_clk);
+image_data_control <= 1'b0;
+$fclose(file_in);
+
+end 
+
+
+always @(posedge tb_clk) 
+ begin
+  if(data_out_out_out_control)
+  begin
+   $fwrite(file_out,"%c",data_out_out_out);
+   data_received = data_received + 1;
+  end
+  
+  if(data_received == `IMAGE)
+  begin
+   $fclose(file_out);
+   $stop;
+  end
+ end
+
+
+topmodule T_M(
+.topmodule_clk(tb_clk),
+.topmodule_rst(tb_rst),
+.data_in_ready(1'b1),
+.data_in_in(image_data),
+.data_in_control(image_data_control),
+.data_out_ready(),
+.data_out_out(data_out_out_out),
+.data_out_control(data_out_out_out_control),
+.stop(intr)
+);
+
+endmodule
